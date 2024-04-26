@@ -1,0 +1,51 @@
+Item := ImportComponent["Item.wlx"];
+
+DBFetch[db_, query_String, number_, False] := Select[db, Function[item, item["Category"] === query], number]
+DBFetch[db_, query_String, number_, True ] := Select[db, Function[item, item["Category"] =!= query], number]
+
+Component[OptionsPattern[]] := With[{
+    Database   = OptionValue["Database"], 
+    LazyLoad   = CreateUUID[],
+    controls   = CreateUUID[],
+    controller = CreateUUID[],
+    categories = OptionValue["Categories"],
+
+    query =      OptionValue["Query"],
+    inverted =      OptionValue["Inverted"],
+
+    appEvents = OptionValue["AppEvents"],
+    clonedAppEvents = EventClone[OptionValue["AppEvents"]]
+},
+Module[{
+    typed = ""
+},
+
+  EventHandler[controls, {
+    "Load" -> Function[data, With[{client = $Client},
+      EventFire[LazyLoad, "Load", data];
+      Echo["Widget Loaded!"];
+    ]]
+  }];
+
+  {
+    With[{
+      SymbolList := 
+        With[{client = $Client},
+          Table[Item["Categories"->categories, "SymbolObject"->note, "Category"->query, "Client"->client, "Controls"->controls], {note, DBFetch[ReleaseHold[Database], query, 200, inverted]} ] // Flatten // ToStringRiffle
+        ]
+    },
+  
+    <div class="mt-0 shrink-0 gap-y-1 flex flex-col">
+      <WebUILazyLoad Event={LazyLoad}>
+          <SymbolList/>
+      </WebUILazyLoad>
+      <WebUIOnLoad Event={controls} Pattern={"Load"}/>
+    </div> 
+   ]
+  
+  }
+] ]
+
+Options[Component] = {"Database"->{}, "Inverted"->False}
+
+Component

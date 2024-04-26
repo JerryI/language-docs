@@ -1,0 +1,116 @@
+(* /* importing dynamic components */ *)
+
+Head        := ImportComponent["Components/Head.wlx"];
+Logo        := ImportComponent["Components/Logo.wlx"];
+
+ShortList        = ImportComponent["Components/List/Component.wlx"];
+
+MarkdownPage        = ImportComponent["Components/Markdown.wlx"];
+
+(* /* HTML Page */ *)
+ExtensionsJS = (StringJoin["/", FileNameToURLPath[#]]) &/@ WLJS`PM`Includes["js"];
+ExtensionsStyles = With[{Path = FileNameToURLPath[#]},
+  <link rel="stylesheet" href="/{Path}"/> 
+] &/@ WLJS`PM`Includes["styles"] // ToStringRiffle;
+
+
+init[n_] := With[{uid = CreateUUID[]}, n["Hash"] = uid; n];
+CreateType[SymbolObject, init, {
+    "Name" -> "Symbol",
+    "Category" -> "Unsorted",
+    "Doc" -> ""
+}];
+
+SymbolObject /: EventHandler[n_SymbolObject, rest__] := EventHandler[n["Hash"], rest];
+SymbolObject /: EventFire[n_SymbolObject, rest__] := EventFire[n["Hash"], rest];
+SymbolObject /: EventClone[n_SymbolObject] := EventClone[n["Hash"]];
+
+Database = {};
+
+addSymbol[name_String] :=
+  With[{
+    note = SymbolObject["Name" -> name]
+  },      
+   
+    AppendTo[Database, note];
+];
+
+SetAttributes[addSymbol, HoldRest]
+
+(*/*    check DB    */*)
+$root = Directory[];
+
+With[{backups = SortBy[FileNames["*.wl", FileNameJoin[{$root, "db"}]], (Now - FileDate[#, "Creation"])&]},
+    If[Length[backups] > 0,
+        Database = Get[
+            backups // First
+        ]
+    ];
+];
+
+makeBackup := With[{hash = Hash[Database]},
+    Put[Database, FileNameJoin[{$root, "db", StringJoin[ToString[hash], ".wl"]}]] // Echo;
+    Echo["Backup created..."];
+    With[{backups = SortBy[FileNames["*.wl", FileNameJoin[{$root, "db"}]], (Now - FileDate[#, "Creation"])&]},
+        If[Length[backups] > 200, 
+            DeleteFile[Last[backups]];
+        ];
+    ];
+]
+
+SetInterval[makeBackup, 1000 60 30];
+
+If[Length[Database] == 0, Module[{names},
+    names = Select[Names["System`*"], !StringMatchQ[#, (___~~"Plot"~~___)|(___~~"Graphics"~~___)]&];
+    names = Drop[names,168];
+    addSymbol /@ names;
+]];
+
+$Categories = {
+    "Unsorted", "Core", "Visualization", "Numerics", "Symbolics", "Files", "Graphs", "Data", "System", "TOBEREMOVED"
+};
+
+markdownQ[_] := False
+markdownQ[string_String] := StringMatchQ[string, "markdown/"~~__]
+
+Router[Rule["Query", _]] := ShortList["Query" -> "Unsorted", "Database"->Hold[Database], "Categories"->$Categories];
+Router[Rule["Query", ""]] := ShortList["Query" -> "Unsorted", "Database"->Hold[Database], "Categories"->$Categories];
+
+fetchSymbol[name_String] := Select[Database, #["Name"]===name &, 1] // First;
+Router[Rule["Query", Name_?markdownQ]] := MarkdownPage["Symbol"->fetchSymbol[StringReplace[Name, "markdown/"~~sym:__ :> sym]], "Categories"->$Categories]
+
+Router[Rule["Query", s_String]] := ShortList["Query" -> s, "Database"->Hold[Database], "Categories"->$Categories];
+
+Categories[Rule["Query", s_String]] := Table[With[{class = If[s === Item, "bg-teal-100", "bg-gray-100"]},
+    <a class="p-1 px-2 {class} rounded hover:bg-teal-200" href="/{Item}"><Item/></a>
+], {Item, $Categories}]
+
+App[request_] := With[{
+    session = CreateUUID[]
+},
+    <html> 
+        <Head>
+            <WLJSHeader List={ExtensionsJS}/>     
+            <ExtensionsStyles/>
+            <WLJSTransportScript Port={ENV["WSPort"]}/>
+            <WebUIInitializationScript/>
+        </Head>  
+        <body class="flex flex-row pt-2 h-full dark:bg-gray-700"> 
+            <div class="h-full flex-grow">
+                <header class="bg-white shadow dark:bg-gray-700">
+                    <div class="flex flex-row p-2 gap-x-2 px-4">
+                        <Categories Query={StringDrop[request["Path"],1]}/>
+                    </div> 
+                </header>
+                <main>
+                    <div class="mx-auto flex shrink max-w-7xl py-6 sm:px-6 lg:px-8 ">      
+                        <Router Query={StringDrop[request["Path"],1]}/>
+                    </div>
+                </main>
+            </div>        
+            
+        </body>
+    </html>
+]
+
+App

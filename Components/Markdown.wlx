@@ -1,0 +1,301 @@
+
+
+baseUrl = "https://reference.wolfram.com/language/ref/"; 
+
+$TimeoutExamples = 1;
+
+getTitle[xml_] := 
+StringJoin["# " , ImportString[
+	ExportString[
+		FirstCase[xml, 
+			XMLElement["h1", {"class" -> "main-title"}, _], 
+			"", Infinity
+		], 
+		"HTMLFragment"
+	], 
+	"HTML"
+]]
+
+
+getDescription[xml_] := StringJoin["> ", ImportString[
+	ExportString[FirstCase[xml, XMLElement["p", {"class" -> "code-description"}, _], "", Infinity], "HTMLFragment"], 
+	"HTML"
+]]; 
+
+splitExpression[astr_] := With[{str = astr},
+  Select[Select[(StringTake[str, Partition[Join[{1}, #, {StringLength[str]}], 2]] &@
+   Flatten[{#1 - 1, #2 + 1} & @@@ 
+     Sort@
+      Cases[
+       CodeParser`CodeConcreteParse[str, 
+         CodeParser`SourceConvention -> "SourceCharacterIndex"][[2]], 
+       LeafNode[Token`Newline, _, a_] :> Lookup[a, Source, Nothing]]]), StringQ], (StringLength[#]>0) &]
+];
+
+(*`*)
+
+getDetails[xml_] := 
+StringRiffle[#, "\n"]& @ 
+Map[StringJoin["- ", ImportString[ExportString[#, "HTMLFragment"], "HTML"]]&] @ 
+Cases[XMLElement["li", __]] @ 
+Last @ 
+FirstCase[xml, XMLElement["ul", {"class" -> "functionList"}, _], "", Infinity]; 
+
+
+$PreviousOut;
+
+evaluateResult[data_String] := With[{
+  splitted = StringTrim /@ splitExpression[data]
+},
+ 
+  TimeConstrained[ 
+  	With[{results = Map[Function[exp, With[{
+
+  	},
+  	  Print[exp];
+  	  $PreviousOut[] = If[StringTake[exp, -1] === ";",
+  	     ToExpression[StringDrop[exp, -1], InputForm, Hold] /. {Out -> $PreviousOut} // ReleaseHold;
+  	    Missing[]
+  	  ,
+        ToExpression[exp, InputForm, Hold] /. {Out -> $PreviousOut} // ReleaseHold
+  	  ]
+	
+  	] ], splitted] // DeleteMissing},
+
+  	  results
+	
+  	], 
+
+   $TimeoutExamples] // evaluateResultPost
+  
+  
+]
+
+evaluateResult[data_String] := "* Result is suppressed due to safety reasons * " // evaluateResultPost
+
+evaluateResultPost[any_String] := StringJoin["```mathematica title=\"Result\"\n", any, "\n```"];
+evaluateResultPost[$Failed] := "(* failed! *)" //evaluateResultPost;
+evaluateResultPost[$Aborted] := "(* timeout! *)" //evaluateResultPost;
+
+
+
+evaluateResultPost[g_Graphics]   := WLJS[g]
+evaluateResultPost[g_Graphics3D] := WLJS[g]
+evaluateResultPost[g_Image]      := WLJS[g]
+
+evaluateResultPost[any_] := ToString[any, InputForm ] //evaluateResultPost;
+evaluateResultPost[any_List] := StringRiffle[evaluateResultPost /@ any, "\n"] 
+
+getExamples[xml_] := 
+Module[{section, blocks}, 
+	section = FirstCase[xml, XMLElement["section", {"id" -> "Examples"}, data_] :> data, "", Infinity]; 
+	
+	blocks = Cases[section, 
+		XMLElement["h2", _, _] | 
+		XMLElement["div", {___, "class" -> "clipboard-input", ___}, _] |  
+		XMLElement["p", __], 
+		
+		Infinity
+	]; 
+	
+	StringRiffle[blocks /. {
+		XMLElement["h2", _, {h2_String, ___}] :> StringJoin["### ", h2], 
+		XMLElement["div", at: {___, "class" -> "clipboard-input", ___}, _] :> With[{
+          data = Import[StringJoin[baseUrl, Association[at]["data-code"]]]
+        },
+			StringJoin["```mathematica\n", data, "\n```", "\n ", evaluateResult[data], "\n"]
+         ], 
+		p: XMLElement["p", ___] :> ImportString[ExportString[p, "HTMLFragment"], "HTML"]
+	}, "\n\n"]
+]
+
+generateFrontMatter[url_String] := With[{},
+	StringJoin["---\ncategoryName: Core\norigin: ", url, "\n---"]
+]
+
+refToMd[name_String] := 
+Module[{ 
+	html, xml
+}, 
+	html = URLRead[StringJoin[baseUrl, name]]["Body"]; 
+	xml = ImportString[html, "XMLObject"]; 
+	
+	StringRiffle[{
+        StringJoin["# ", name],
+		getDescription[xml], 
+		getDetails[xml], 
+		"## Examples", 
+		getExamples[xml]
+	}, "\n\n"]
+]
+
+generateMarkdown[sym_SymbolObject] := With[{},
+    sym["Doc"] = Module[{},
+        If[sym["Doc"] =!= "", Return[sym["Doc"], Module]];
+        refToMd[sym["Name"]]
+    ]
+]
+
+MarkdownStyles = 
+  <style>
+    .markdown {
+        font-size: medium;
+    }
+
+    .markdown h4 {
+        font-weight: 500;
+    }
+
+    .markdown h3 {
+        font-weight: 500;
+        font-size:large;
+    }
+
+    .markdown h2 {
+        font-weight: 500;
+        font-size:x-large;
+        padding-bottom: 0.25rem;
+    }
+
+    .markdown h1 {
+        font-weight: 500;
+        font-size: xx-large;
+        padding-bottom: 0.5rem;
+    }
+
+    .markdown ul {
+        list-style-type: disc !important;
+        padding-left: 1rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .markdown ol {
+        padding-left: 1rem;
+        list-style-type: auto;
+        padding-bottom: 0.5rem;
+    }
+
+    .markdown a {
+        text-decoration:underline;
+        color: blue;
+    }
+  </style>;
+
+docLayout[sym_SymbolObject] := With[{
+    data = generateMarkdown[sym], UId = CreateUUID[],
+    Controls = CreateUUID[]
+},
+    EventHandler[UId, Function[Null,
+        EventFire[Controls, "Load", <|"Client"->$Client, "Payload" -> data|>];
+    ]];
+
+    <div>
+        <div class="markdown relative items-center block w-full overflow-x-scroll p-6 bg-white border border-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-800 dark:hover:bg-gray-700" id="{UId}"></div>
+        <WebUIJSBind Event={Controls}>
+	        //will be executed once
+	        const doc = document.getElementById('<UId/>');
+
+            const {markedHighlight} = globalThis.markedHighlight;
+
+            marked.use(markedHighlight({
+                langPrefix: 'hljs language-',
+                highlight(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                }
+            }) );
+        
+
+	        //binding to event patterns
+	        this.on('Load', async (data) => {
+	        	const assoc = await interpretate(data, {hold:true});
+	        	const payload = await interpretate(assoc.Payload, {});
+	        	setInnerHTML(doc, marked.parse(payload));
+	        });
+        </WebUIJSBind>    
+        <WebUIOnLoad Event={UId}/>     
+    </div>
+]
+
+Component[OptionsPattern[]] := With[{
+    SymbolName = OptionValue["Symbol"]["Name"],
+    DocsRendered := docLayout[OptionValue["Symbol"]],
+    LazyLoadData = CreateUUID[],
+    LoadingPlaceholder = CreateUUID[],
+    Controls = CreateUUID[],
+    SymbolObject = OptionValue["Symbol"],
+    UId = CreateUUID[],
+
+    SymbolCategoryList = Table[
+        If[Cat === OptionValue["Symbol"]["Category"],
+            <option selected="true"><Cat/></option>
+        ,
+            <option><Cat/></option>
+        ]
+        
+    , {Cat, OptionValue["Categories"]}]
+},
+    EventHandler[Controls, {
+        "Loaded" -> Function[Null,
+            EventFire[LazyLoadData, "Load", <|"Client"->$Client|>];
+            EventFire[LoadingPlaceholder, "Clear", <|"Client"->$Client|>];
+        ],
+
+        "SelectCategory" -> Function[state,
+            Echo["Update select!"];
+            Echo[state];
+            With[{n = SymbolObject},
+                n["Category"] = state
+            ];        
+    
+            EventFire[SymbolObject, "Update", Null];        
+        ]
+    }];
+
+    <div class="flex flex-col gap-y-2 w-full h-full">
+        <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked-highlight/lib/index.umd.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.8.0/styles/a11y-dark.min.css"/> 
+        <script src="https://unpkg.com/@highlightjs/cdn-assets@11.8.0/highlight.min.js"></script> 
+
+        <MarkdownStyles/>
+
+        <div class="w-full">
+            <div class="flex flex-col">
+                <label for="{UId}-category" class="block text-sm font-medium leading-6 text-gray-900">Category</label>
+                <select id="{UId}-category" class="mt-2 block w-full rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                    <SymbolCategoryList/>
+                </select>
+            </div>
+            <script type="module">
+                const cat = document.getElementById('<UId/>-category');
+
+                cat.addEventListener('change', (ev) => {
+
+                    console.log(ev);
+                    ev.preventDefault();
+                    console.log(cat.value);
+                    server.emitt('<Controls/>', '"'+cat.value+'"', 'SelectCategory');
+                }, false);            
+            </script>
+        </div>
+        <div class="w-full">
+            <WebUILazyLoad Event={LazyLoadData}>
+                <DocsRendered/>
+            </WebUILazyLoad>
+            <WebUIRefresh Event={LoadingPlaceholder}>
+                <div class="relative items-center block max-w-sm p-6 bg-white border border-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-800 dark:hover:bg-gray-700">
+                    <h5 class="mb-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white opacity-20"><SymbolName/></h5>
+                    <p class="font-normal text-gray-700 dark:text-gray-400 opacity-20">Crunching megabytes of data just for you! Hands tight</p>
+                    <div role="status" class="absolute -translate-x-1/2 -translate-y-1/2 top-2/4 left-1/2">
+                        <svg aria-hidden="true" class="w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-blue-600" viewBox="0 0 100 101" fill="none" ><path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/><path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/></svg>
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                </div>
+            </WebUIRefresh>   
+        </div>
+        <WebUIOnLoad Event={Controls} Pattern={"Loaded"}/>     
+    </div>
+]
+
+Component

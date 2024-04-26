@@ -1,0 +1,23 @@
+SymbolList     = ImportComponent["SymbolList.wlx"];
+Header        := ImportComponent["Header.wlx"];
+
+
+
+
+Component[OptionsPattern[]] := With[{categories = OptionValue["Categories"], query = OptionValue["Query"], Title=OptionValue["Query"], Database=OptionValue["Database"]},
+    <div class="flex mb-auto pr-2 justify-center font-medium">
+        <div class="flex flex-grow items-center justify-center h-full text-gray-600 bg-gray-100">
+            <div class="max-w-full p-8 bg-white rounded-lg shadow-lg">
+                <Header Title={Title}/>
+                <div class="flex flex-row">
+                    <SymbolList Query={query} Database={Database} Categories={categories}/>
+                    <SymbolList Query={query} Database={Database} Categories={categories} Inverted={True} />
+                </div>
+            </div>
+        </div>
+    </div>
+]
+
+Options[Component] = {"Query"->"_"}
+
+Component
