@@ -22,8 +22,8 @@ PacletRepositories[{
 
 (* Here you can configure *)
 ENV = <|
-    "WSPort"->8011,
-    "HTTPPort"->8010,
+    "WSPort"->80,
+    "HTTPPort"->81,
     "Host"->"0.0.0.0"
 |>
 
