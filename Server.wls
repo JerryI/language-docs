@@ -24,7 +24,7 @@ PacletRepositories[{
 ENV = <|
     "WSPort"->8011,
     "HTTPPort"->8010,
-    "Host"->"127.0.0.1"
+    "Host"->"0.0.0.0"
 |>
 
 ENV["HAddr"] := StringTemplate["``:``"][ENV["Host"], ENV["HTTPPort"]]
