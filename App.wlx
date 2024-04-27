@@ -40,16 +40,24 @@ SetAttributes[addSymbol, HoldRest]
 (*/*    check DB    */*)
 $root = Directory[];
 
+SymbolObject`Serialize[sym_SymbolObject] (*`*) := With[{},
+    (# -> sym[#]) &/@ {"Name", "Category", "Doc"} // Association
+]
+
+SymbolObject`Deserialize[sym_Association] (*`*) := With[{},
+    SymbolObject["Name"->sym["Name"], "Category"->sym["Category"], "Doc"->sym["Doc"]] // Association
+]
+
 With[{backups = SortBy[FileNames["*.wl", FileNameJoin[{$root, "db"}]], (Now - FileDate[#, "Creation"])&]},
     If[Length[backups] > 0,
-        Database = Get[
+        Database = SymbolObject`Deserialize (*`*) /@ Get[
             backups // First
         ]
     ];
 ];
 
 makeBackup := With[{hash = Hash[Database]},
-    Put[Database, FileNameJoin[{$root, "db", StringJoin[ToString[hash], ".wl"]}]] // Echo;
+    Put[SymbolObject`Serialize /@ Database (*`*), FileNameJoin[{$root, "db", StringJoin[ToString[hash], ".wl"]}]] // Echo;
     Echo["Backup created..."];
     With[{backups = SortBy[FileNames["*.wl", FileNameJoin[{$root, "db"}]], (Now - FileDate[#, "Creation"])&]},
         If[Length[backups] > 200, 
