@@ -45,7 +45,7 @@ SymbolObject`Serialize[sym_SymbolObject] (*`*) := With[{},
 ]
 
 SymbolObject`Deserialize[sym_Association] (*`*) := With[{},
-    SymbolObject["Name"->sym["Name"], "Category"->sym["Category"], "Doc"->sym["Doc"]] // Association
+    SymbolObject["Name"->sym["Name"], "Category"->sym["Category"], "Doc"->sym["Doc"]] 
 ]
 
 With[{backups = SortBy[FileNames["*.wl", FileNameJoin[{$root, "db"}]], (Now - FileDate[#, "Creation"])&]},
