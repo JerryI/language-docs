@@ -31,7 +31,7 @@ Module[{
     With[{
       SymbolList := 
         With[{client = $Client},
-          Table[Item["Categories"->categories, "SymbolObject"->note, "Category"->query, "Client"->client, "Controls"->controls], {note, DBFetch[ReleaseHold[Database], query, 200, inverted]} ] // Flatten // ToStringRiffle
+          Table[Item["Categories"->categories, "SymbolObject"->note, "Category"->query, "Client"->client, "Controls"->controls], {note, DBFetch[ReleaseHold[Database], query, 50, inverted]} ] // Flatten // ToStringRiffle
         ]
     },
   
