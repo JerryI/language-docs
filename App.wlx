@@ -75,7 +75,7 @@ If[Length[Database] == 0, Module[{names},
 ]];
 
 $Categories = {
-    "Unsorted", "Core", "Visualization", "Numerics", "Symbolics", "Files", "Graphs", "Data", "System IO", "Statistics", "Web", "Uncategorized3", "Uncategorized2". "Date", "TOBEREMOVED", "NONEED", "BOXES", "Graphics", "Graphics3D",  "High-order math",  "Questinable", "Uncategorized", "MathematicaFrontendOnly"
+    "Unsorted", "Core", "Visualization", "Numerics", "Symbolics", "Files", "Graphs", "Data", "System IO", "Statistics", "Web", "Uncategorized3", "Uncategorized2", "Date", "TOBEREMOVED", "NONEED", "BOXES", "Graphics", "Graphics3D",  "High-order math",  "Questinable", "Uncategorized", "MathematicaFrontendOnly"
 };
 
 markdownQ[_] := False
@@ -106,7 +106,7 @@ App[request_] := With[{
         <body class="flex flex-row pt-2 h-full dark:bg-gray-700"> 
             <div class="h-full flex-grow">
                 <header class="bg-white shadow dark:bg-gray-700">
-                    <div class="flex flex-row p-2 gap-x-2 px-4">
+                    <div class="flex flex-wrap flex-row p-2 gap-x-2 px-4">
                         <Categories Query={StringDrop[request["Path"],1]}/>
                     </div> 
                 </header>
