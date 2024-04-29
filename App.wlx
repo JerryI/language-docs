@@ -75,7 +75,7 @@ If[Length[Database] == 0, Module[{names},
 ]];
 
 $Categories = {
-    "Unsorted", "Core", "Visualization", "Numerics", "Symbolics", "Files", "Graphs", "Data", "System IO", "Statistics", "Web", "Uncategorized3", "Uncategorized2", "Date", "TOBEREMOVED", "NONEED", "BOXES", "Graphics", "Graphics3D",  "High-order math",  "Questinable", "Uncategorized", "MathematicaFrontendOnly"
+    "Unsorted", "Core", "Visualization", "Natural Language", "Parallel", "Image", "String", "Geometry", "Data manipulations", "Time-related computing", "Sound",  "Numerics", "Symbolics", "Files", "Graphs", "Data", "System IO", "Statistics", "Web", "Uncategorized3", "Uncategorized2", "Date", "TOBEREMOVED", "NONEED", "BOXES", "Graphics", "Graphics3D",  "High-order math",  "Questinable", "Uncategorized", "MathematicaFrontendOnly"
 };
 
 markdownQ[_] := False

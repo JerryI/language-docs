@@ -1,140 +1,23 @@
+refToMd = ImportComponent["Markdown.wl"];
 
-
-baseUrl = "https://reference.wolfram.com/language/ref/"; 
-
-$TimeoutExamples = 1;
-
-getTitle[xml_] := 
-StringJoin["# " , ImportString[
-	ExportString[
-		FirstCase[xml, 
-			XMLElement["h1", {"class" -> "main-title"}, _], 
-			"", Infinity
-		], 
-		"HTMLFragment"
-	], 
-	"HTML"
-]]
-
-
-getDescription[xml_] := StringJoin["> ", ImportString[
-	ExportString[FirstCase[xml, XMLElement["p", {"class" -> "code-description"}, _], "", Infinity], "HTMLFragment"], 
-	"HTML"
-]]; 
-
-splitExpression[astr_] := With[{str = astr},
-  Select[Select[(StringTake[str, Partition[Join[{1}, #, {StringLength[str]}], 2]] &@
-   Flatten[{#1 - 1, #2 + 1} & @@@ 
-     Sort@
-      Cases[
-       CodeParser`CodeConcreteParse[str, 
-         CodeParser`SourceConvention -> "SourceCharacterIndex"][[2]], 
-       LeafNode[Token`Newline, _, a_] :> Lookup[a, Source, Nothing]]]), StringQ], (StringLength[#]>0) &]
-];
-
-(*`*)
-
-getDetails[xml_] := 
-StringRiffle[#, "\n"]& @ 
-Map[StringJoin["- ", ImportString[ExportString[#, "HTMLFragment"], "HTML"]]&] @ 
-Cases[XMLElement["li", __]] @ 
-Last @ 
-FirstCase[xml, XMLElement["ul", {"class" -> "functionList"}, _], "", Infinity]; 
-
-
-$PreviousOut;
-
-evaluateResult[data_String] := With[{
-  splitted = StringTrim /@ splitExpression[data]
-},
- 
-  TimeConstrained[ 
-  	With[{results = Map[Function[exp, With[{
-
-  	},
-  	  Print[exp];
-  	  $PreviousOut[] = If[StringTake[exp, -1] === ";",
-  	     ToExpression[StringDrop[exp, -1], InputForm, Hold] /. {Out -> $PreviousOut} // ReleaseHold;
-  	    Missing[]
-  	  ,
-        ToExpression[exp, InputForm, Hold] /. {Out -> $PreviousOut} // ReleaseHold
-  	  ]
-	
-  	] ], splitted] // DeleteMissing},
-
-  	  results
-	
-  	], 
-
-   $TimeoutExamples] // evaluateResultPost
-  
-  
-]
-
-evaluateResult[data_String] := "* Result is suppressed due to safety reasons * " // evaluateResultPost
-
-evaluateResultPost[any_String] := StringJoin["```mathematica title=\"Result\"\n", any, "\n```"];
-evaluateResultPost[$Failed] := "(* failed! *)" //evaluateResultPost;
-evaluateResultPost[$Aborted] := "(* timeout! *)" //evaluateResultPost;
-
-
-
-evaluateResultPost[g_Graphics]   := WLJS[g]
-evaluateResultPost[g_Graphics3D] := WLJS[g]
-evaluateResultPost[g_Image]      := WLJS[g]
-
-evaluateResultPost[any_] := ToString[any, InputForm ] //evaluateResultPost;
-evaluateResultPost[any_List] := StringRiffle[evaluateResultPost /@ any, "\n"] 
-
-getExamples[xml_] := 
-Module[{section, blocks}, 
-	section = FirstCase[xml, XMLElement["section", {"id" -> "Examples"}, data_] :> data, "", Infinity]; 
-	
-	blocks = Cases[section, 
-		XMLElement["h2", _, _] | 
-		XMLElement["div", {___, "class" -> "clipboard-input", ___}, _] |  
-		XMLElement["p", __], 
-		
-		Infinity
-	]; 
-	
-	StringRiffle[blocks /. {
-		XMLElement["h2", _, {h2_String, ___}] :> StringJoin["### ", h2], 
-		XMLElement["div", at: {___, "class" -> "clipboard-input", ___}, _] :> With[{
-          data = Import[StringJoin[baseUrl, Association[at]["data-code"]]]
-        },
-			StringJoin["```mathematica\n", data, "\n```", "\n ", evaluateResult[data], "\n"]
-         ], 
-		p: XMLElement["p", ___] :> ImportString[ExportString[p, "HTMLFragment"], "HTML"]
-	}, "\n\n"]
-]
-
-generateFrontMatter[url_String] := With[{},
-	StringJoin["---\ncategoryName: Core\norigin: ", url, "\n---"]
-]
-
-refToMd[name_String] := 
-Module[{ 
-	html, xml
-}, 
-	html = URLRead[StringJoin[baseUrl, name]]["Body"]; 
-	xml = ImportString[html, "XMLObject"]; 
-	
-	StringRiffle[{
-        StringJoin["# ", name],
-		getDescription[xml], 
-		getDetails[xml], 
-		"## Examples", 
-		getExamples[xml]
-	}, "\n\n"]
-]
-
-generateMarkdown[sym_SymbolObject] := With[{},
-    sym["Doc"] = Module[{},
-        If[sym["Doc"] =!= "", Return[sym["Doc"], Module]];
-        refToMd[sym["Name"]]
+generateMarkdown[sym_SymbolObject] := With[{p = Promise[],
+    result = Module[{},
+        If[sym["Doc"] =!= "", With[{t = Promise[]}, EventFire[t, Resolve, sym["Doc"]]; t], 
+        With[{f = refToMd[sym["Name"]]},
+            Echo["Test.."];
+            Echo[f];
+            f
+        ]]
     ]
+},
+    Then[result, Function[data,
+        Echo["Resolve"];
+        If[sym["Doc"] === "", sym["Doc"] = data];
+        EventFire[p, Resolve, data];
+    ]];
+    p
 ]
+
 
 MarkdownStyles = 
   <style>
@@ -181,15 +64,18 @@ MarkdownStyles =
     }
   </style>;
 
-docLayout[sym_SymbolObject] := With[{
-    data = generateMarkdown[sym], UId = CreateUUID[],
+DocsRendered[Rule["Data", assoc_]] := With[{
+    UId = CreateUUID[],
     Controls = CreateUUID[]
 },
     EventHandler[UId, Function[Null,
-        EventFire[Controls, "Load", <|"Client"->$Client, "Payload" -> data|>];
+        With[{client = $Client},
+            Echo["Loaded?"];
+            EventFire[Controls, "Load", <|"Client"->client, "Payload" -> assoc["Content"]|>];
+        ];
     ]];
 
-    <div>
+     <div>
         <div class="markdown relative items-center block w-full overflow-x-scroll p-6 bg-white border border-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-800 dark:hover:bg-gray-700" id="{UId}"></div>
         <WebUIJSBind Event={Controls}>
 	        //will be executed once
@@ -214,16 +100,15 @@ docLayout[sym_SymbolObject] := With[{
 	        });
         </WebUIJSBind>    
         <WebUIOnLoad Event={UId}/>     
-    </div>
+     </div>
 ]
 
-Component[OptionsPattern[]] := With[{
+Component[OptionsPattern[]] := With[{TemporalChannel = CreateUUID[]}, With[{
     SymbolName = OptionValue["Symbol"]["Name"],
-    DocsRendered := docLayout[OptionValue["Symbol"]],
     LazyLoadData = CreateUUID[],
     LoadingPlaceholder = CreateUUID[],
     Controls = CreateUUID[],
-    SymbolObject = OptionValue["Symbol"],
+    SymObject = OptionValue["Symbol"],
     UId = CreateUUID[],
 
     SymbolCategoryList = Table[
@@ -237,18 +122,23 @@ Component[OptionsPattern[]] := With[{
 },
     EventHandler[Controls, {
         "Loaded" -> Function[Null,
-            EventFire[LazyLoadData, "Load", <|"Client"->$Client|>];
-            EventFire[LoadingPlaceholder, "Clear", <|"Client"->$Client|>];
+            With[{cli = $Client},
+                Then[generateMarkdown[SymObject], Function[content,
+                    EventFire[LazyLoadData, "Load", <|"Client"->cli, "Content" -> content|>];
+                    EventFire[LoadingPlaceholder, "Clear", <|"Client"->cli|>];
+                ]];
+            ];
+            
         ],
 
         "SelectCategory" -> Function[state,
             Echo["Update select!"];
             Echo[state];
-            With[{n = SymbolObject},
+            With[{n = SymObject},
                 n["Category"] = state
             ];        
     
-            EventFire[SymbolObject, "Update", Null];        
+            EventFire[SymObject, "Update", Null];        
         ]
     }];
 
@@ -281,7 +171,7 @@ Component[OptionsPattern[]] := With[{
         </div>
         <div class="w-full">
             <WebUILazyLoad Event={LazyLoadData}>
-                <DocsRendered/>
+                <DocsRendered Data={WebUILazyLoadDataProvided}/>
             </WebUILazyLoad>
             <WebUIRefresh Event={LoadingPlaceholder}>
                 <div class="relative items-center block max-w-sm p-6 bg-white border border-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-800 dark:hover:bg-gray-700">
@@ -296,6 +186,6 @@ Component[OptionsPattern[]] := With[{
         </div>
         <WebUIOnLoad Event={Controls} Pattern={"Loaded"}/>     
     </div>
-]
+]]
 
 Component

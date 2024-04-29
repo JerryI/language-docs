@@ -50,6 +50,7 @@ ENV["WAddr"] := StringTemplate["``:``"][ENV["Host"], ENV["WSPort"]]
 
 (* Event handling and WLJS communication *)
 <<JerryI`Misc`Events`
+<<JerryI`Misc`Events`Promise`
 <<KirillBelov`CSockets`EventsExtension`
 <<JerryI`Misc`WLJS`Transport`
 <<JerryI`Misc`Async`
